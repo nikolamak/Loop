@@ -7,10 +7,10 @@
 //
 
 import Foundation
-import AmplitudeFramework
+import Amplitude
 
 
-class AnalyticsManager {
+final class AnalyticsManager {
 
     var amplitudeService: AmplitudeService {
         didSet {
