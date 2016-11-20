@@ -11,26 +11,37 @@ import UIKit
 
 final class BasalRateHUDView: HUDView {
 
-    @IBOutlet private var basalStateView: BasalStateView!
+    @IBOutlet private weak var basalStateView: BasalStateView!
 
-    @IBOutlet private var basalRateLabel: UILabel! {
+    @IBOutlet private weak var basalRateLabel: UILabel! {
         didSet {
             basalRateLabel?.text = String(format: basalRateFormatString, "–")
             basalRateLabel?.textColor = .doseTintColor
+
+            accessibilityValue = NSLocalizedString("Unknown", comment: "Accessibility value for an unknown value")
         }
     }
 
-    private lazy var basalRateFormatString = NSLocalizedString("%@ U", comment: "The format string describing the basal rate. ")
+    private lazy var basalRateFormatString = NSLocalizedString("%@ U", comment: "The format string describing the basal rate.")
 
-    func setNetBasalRate(rate: Double, percent: Double, atDate date: NSDate) {
-        caption?.text = timeFormatter.stringFromDate(date)
-        basalRateLabel?.text = String(format: basalRateFormatString, decimalFormatter.stringFromNumber(rate) ?? "–")
+    func setNetBasalRate(_ rate: Double, percent: Double, at date: Date) {
+        let time = timeFormatter.string(from: date)
+        caption?.text = time
+
+        if let rateString = decimalFormatter.string(from: NSNumber(value: rate)) {
+            basalRateLabel?.text = String(format: basalRateFormatString, rateString)
+            accessibilityValue = String(format: NSLocalizedString("%1$@ units per hour at %2$@", comment: "Accessibility format string describing the basal rate. (1: localized basal rate value)(2: last updated time)"), rateString, time)
+        } else {
+            basalRateLabel?.text = nil
+            accessibilityValue = nil
+        }
+
         basalStateView.netBasalPercent = percent
     }
 
-    private lazy var decimalFormatter: NSNumberFormatter = {
-        let formatter = NSNumberFormatter()
-        formatter.numberStyle = .DecimalStyle
+    private lazy var decimalFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
         formatter.minimumFractionDigits = 1
         formatter.minimumIntegerDigits = 1
         formatter.positiveFormat = "+0.0##"
@@ -39,10 +50,10 @@ final class BasalRateHUDView: HUDView {
         return formatter
     }()
 
-    private lazy var timeFormatter: NSDateFormatter = {
-        let formatter = NSDateFormatter()
-        formatter.dateStyle = .NoStyle
-        formatter.timeStyle = .ShortStyle
+    private lazy var timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
 
         return formatter
     }()

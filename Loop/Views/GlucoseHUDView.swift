@@ -13,41 +13,96 @@ import HealthKit
 
 final class GlucoseHUDView: HUDView {
 
-    @IBOutlet private var unitLabel: UILabel! {
+    @IBOutlet private weak var unitLabel: UILabel! {
         didSet {
-            unitLabel?.text = "–"
-            unitLabel?.textColor = .glucoseTintColor
+            unitLabel.text = "–"
+            unitLabel.textColor = .glucoseTintColor
         }
     }
 
-    @IBOutlet private var glucoseLabel: UILabel! {
+    @IBOutlet private weak var glucoseLabel: UILabel! {
         didSet {
-            glucoseLabel?.text = "–"
-            glucoseLabel?.textColor = .glucoseTintColor
+            glucoseLabel.text = "–"
+            glucoseLabel.textColor = .glucoseTintColor
         }
     }
 
-    func set(glucoseValue: GlucoseValue, for unit: HKUnit, from sensor: SensorDisplayable?) {
-        caption?.text = timeFormatter.stringFromDate(glucoseValue.startDate)
+    @IBOutlet private weak var alertLabel: UILabel! {
+        didSet {
+            alertLabel.alpha = 0
+            alertLabel.backgroundColor = UIColor.agingColor
+            alertLabel.textColor = UIColor.white
+            alertLabel.layer.cornerRadius = 9
+            alertLabel.clipsToBounds = true
+        }
+    }
 
-        let numberFormatter = NSNumberFormatter()
-        numberFormatter.numberStyle = .DecimalStyle
-        numberFormatter.minimumFractionDigits = unit.preferredMinimumFractionDigits
-        glucoseLabel.text = numberFormatter.stringFromNumber(glucoseValue.quantity.doubleValueForUnit(unit))
+    private enum SensorAlertState {
+        case ok
+        case missing
+        case invalid
+        case remote
+    }
+
+    private var sensorAlertState = SensorAlertState.ok {
+        didSet {
+            var alertLabelAlpha: CGFloat = 1
+
+            switch sensorAlertState {
+            case .ok:
+                alertLabelAlpha = 0
+            case .missing, .invalid:
+                alertLabel.backgroundColor = UIColor.agingColor
+                alertLabel.text = "!"
+            case .remote:
+                alertLabel.backgroundColor = UIColor.unknownColor
+                alertLabel.text = "☁︎"
+            }
+
+            UIView.animate(withDuration: 0.25, animations: {
+                self.alertLabel.alpha = alertLabelAlpha
+            })
+        }
+    }
+
+    func set(_ glucoseValue: GlucoseValue, for unit: HKUnit, from sensor: SensorDisplayable?) {
+        var accessibilityStrings = [String]()
+
+        let time = timeFormatter.string(from: glucoseValue.startDate)
+        caption?.text = time
+
+        let numberFormatter = NumberFormatter.glucoseFormatter(for: unit)
+        if let valueString = numberFormatter.string(from: NSNumber(value: glucoseValue.quantity.doubleValue(for: unit))) {
+            glucoseLabel.text = valueString
+            accessibilityStrings.append(String(format: NSLocalizedString("%1$@ at %2$@", comment: "Accessbility format value describing glucose: (1: glucose number)(2: glucose time)"), valueString, time))
+        }
 
         var unitStrings = [unit.glucoseUnitDisplayString]
 
         if let trend = sensor?.trendType {
-            unitStrings.append(trend.description)
+            unitStrings.append(trend.symbol)
+            accessibilityStrings.append(trend.localizedDescription)
         }
 
-        unitLabel.text = unitStrings.joinWithSeparator(" ")
+        if sensor == nil {
+            sensorAlertState = .missing
+        } else if sensor!.isStateValid == false {
+            sensorAlertState = .invalid
+            accessibilityStrings.append(NSLocalizedString("Needs attention", comment: "Accessibility label component for glucose HUD describing an invalid state"))
+        } else if sensor!.isLocal == false {
+            sensorAlertState = .remote
+        } else {
+            sensorAlertState = .ok
+        }
+
+        unitLabel.text = unitStrings.joined(separator: " ")
+        accessibilityValue = accessibilityStrings.joined(separator: ", ")
     }
 
-    private lazy var timeFormatter: NSDateFormatter = {
-        let formatter = NSDateFormatter()
-        formatter.dateStyle = .NoStyle
-        formatter.timeStyle = .ShortStyle
+    private lazy var timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
 
         return formatter
     }()
